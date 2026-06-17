@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">JAVIS</string>
+    <string name="tile_label">JAVIS</string>
+    <string name="notification_listener_label">JAVIS Notification Reader</string>
+    <string name="accessibility_service_label">JAVIS Assistant</string>
+    <string name="accessibility_service_description">JAVIS uses accessibility to help you navigate your device hands-free and assist with app interactions.</string>
+</resources>
