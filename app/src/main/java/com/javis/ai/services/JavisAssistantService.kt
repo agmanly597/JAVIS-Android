@@ -18,9 +18,11 @@ import com.javis.ai.domain.PendingAction
 import com.javis.ai.voice.SpeechRecognitionManager
 import com.javis.ai.voice.SpeechState
 import com.javis.ai.voice.TTSManager
+import com.javis.ai.settings.SettingsManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -30,6 +32,7 @@ class JavisAssistantService : Service() {
     @Inject lateinit var ttsManager: TTSManager
     @Inject lateinit var agentRouter: AgentRouter
     @Inject lateinit var aiProviderManager: AIProviderManager
+    @Inject lateinit var settingsManager: SettingsManager
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var pendingAction: PendingAction? = null
@@ -54,6 +57,22 @@ class JavisAssistantService : Service() {
         speechManager.initialize()
         scope.launch { aiProviderManager.configure() }
         observeSpeechResults()
+        scope.launch { maybeStartFloatingButton() }
+    }
+
+    private suspend fun maybeStartFloatingButton() {
+        val settings = settingsManager.settings.first()
+        if (!settings.floatingButtonEnabled) return
+        val canDraw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            android.provider.Settings.canDrawOverlays(this)
+        } else true
+        if (!canDraw) return
+        val floatIntent = Intent(this, FloatingWindowService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(floatIntent)
+        } else {
+            startService(floatIntent)
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
