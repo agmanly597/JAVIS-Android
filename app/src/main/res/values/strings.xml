@@ -5,4 +5,5 @@
     <string name="notification_listener_label">JAVIS Notification Reader</string>
     <string name="accessibility_service_label">JAVIS Assistant</string>
     <string name="accessibility_service_description">JAVIS uses accessibility to help you navigate your device hands-free and assist with app interactions.</string>
+    <string name="widget_description">Tap to activate JAVIS voice assistant</string>
 </resources>
