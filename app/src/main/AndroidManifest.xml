@@ -120,12 +120,17 @@
             </intent-filter>
         </receiver>
 
-        <!-- Floating button overlay activity (transparent) -->
+        <!-- Floating button overlay activity (transparent, for permission request) -->
         <activity
             android:name=".ui.FloatingOverlayActivity"
-            android:exported="false"
+            android:exported="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:launchMode="singleInstance" />
+
+        <!-- Floating window service (draws the J button on top of all apps) -->
+        <service
+            android:name=".services.FloatingWindowService"
+            android:exported="false" />
 
     </application>
 </manifest>
