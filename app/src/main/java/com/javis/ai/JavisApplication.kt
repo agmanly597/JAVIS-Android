@@ -18,41 +18,31 @@ class JavisApplication : Application() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(NotificationManager::class.java)
 
-            val assistantChannel = NotificationChannel(
-                CHANNEL_ASSISTANT,
-                "JAVIS Assistant",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "JAVIS assistant running in background"
-                setShowBadge(false)
-            }
-
-            val alertChannel = NotificationChannel(
-                CHANNEL_ALERTS,
-                "JAVIS Alerts",
-                NotificationManager.IMPORTANCE_DEFAULT
-            ).apply {
-                description = "Important notifications from JAVIS"
-            }
-
-            val notifSummaryChannel = NotificationChannel(
-                CHANNEL_NOTIFICATION_SUMMARY,
-                "Notification Summaries",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Summarized notifications read by JAVIS"
-            }
-
-            manager.createNotificationChannels(
-                listOf(assistantChannel, alertChannel, notifSummaryChannel)
-            )
+            manager.createNotificationChannels(listOf(
+                NotificationChannel(CHANNEL_ASSISTANT, "JAVIS Assistant", NotificationManager.IMPORTANCE_LOW).apply {
+                    description = "JAVIS assistant running in background"
+                    setShowBadge(false)
+                },
+                NotificationChannel(CHANNEL_WAKE, "Wake Word Listener", NotificationManager.IMPORTANCE_MIN).apply {
+                    description = "Always-on wake word detection — Say Hey Javis"
+                    setShowBadge(false)
+                },
+                NotificationChannel(CHANNEL_ALERTS, "JAVIS Alerts", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                    description = "Important notifications from JAVIS"
+                },
+                NotificationChannel(CHANNEL_NOTIFICATION_SUMMARY, "Notification Summaries", NotificationManager.IMPORTANCE_LOW).apply {
+                    description = "Summarized notifications read by JAVIS"
+                }
+            ))
         }
     }
 
     companion object {
         const val CHANNEL_ASSISTANT = "javis_assistant"
+        const val CHANNEL_WAKE = "javis_wake"
         const val CHANNEL_ALERTS = "javis_alerts"
         const val CHANNEL_NOTIFICATION_SUMMARY = "javis_notif_summary"
         const val NOTIFICATION_ID_ASSISTANT = 1001
+        const val NOTIFICATION_ID_WAKE = 1002
     }
 }
