@@ -1,5 +1,8 @@
 package com.javis.ai.ui.screens
 
+import android.content.Intent
+import android.os.Build
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,8 +13,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.javis.ai.ai.ProviderType
+import com.javis.ai.services.FloatingWindowService
+import com.javis.ai.ui.FloatingOverlayActivity
 import com.javis.ai.ui.MainViewModel
 import com.javis.ai.ui.theme.*
 import kotlinx.coroutines.launch
@@ -21,11 +27,26 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(viewModel: MainViewModel) {
     val settings by viewModel.settings.collectAsState()
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var groqKey by remember(settings.groqApiKey) { mutableStateOf(settings.groqApiKey) }
     var deepSeekKey by remember(settings.deepSeekApiKey) { mutableStateOf(settings.deepSeekApiKey) }
     var userName by remember(settings.userName) { mutableStateOf(settings.userName) }
     var showGroqKey by remember { mutableStateOf(false) }
     var showDSKey by remember { mutableStateOf(false) }
+
+    fun hasOverlayPermission() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        Settings.canDrawOverlays(context)
+    } else true
+
+    fun startFloatService() {
+        val i = Intent(context, FloatingWindowService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(i)
+        else context.startService(i)
+    }
+
+    fun stopFloatService() {
+        context.stopService(Intent(context, FloatingWindowService::class.java))
+    }
 
     Column(
         modifier = Modifier
@@ -146,7 +167,93 @@ fun SettingsScreen(viewModel: MainViewModel) {
                 }
             }
 
-            // Notifications & Service
+            // Floating Button — dedicated section with permission handling
+            item {
+                SettingsSection("Floating Button") {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        ToggleRow(
+                            label = "Show Floating Button",
+                            description = "Tap-anywhere J button stays on top of all apps",
+                            checked = settings.floatingButtonEnabled,
+                            onCheckedChange = { enabled ->
+                                scope.launch {
+                                    viewModel.settingsManager.updateFloatingButton(enabled)
+                                    if (enabled) {
+                                        if (hasOverlayPermission()) startFloatService()
+                                        else {
+                                            context.startActivity(
+                                                Intent(context, FloatingOverlayActivity::class.java).apply {
+                                                    action = FloatingOverlayActivity.ACTION_REQUEST_PERMISSION
+                                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                }
+                                            )
+                                        }
+                                    } else {
+                                        stopFloatService()
+                                    }
+                                }
+                            }
+                        )
+                        if (!hasOverlayPermission()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.Warning,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    "Permission required",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                TextButton(
+                                    onClick = {
+                                        context.startActivity(
+                                            Intent(context, FloatingOverlayActivity::class.java).apply {
+                                                action = FloatingOverlayActivity.ACTION_REQUEST_PERMISSION
+                                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            }
+                                        )
+                                    }
+                                ) {
+                                    Text("Grant", color = JavisBlue)
+                                }
+                            }
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = { if (hasOverlayPermission()) startFloatService() },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = JavisBlue)
+                            ) {
+                                Icon(Icons.Default.OpenWith, null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Show Now", style = MaterialTheme.typography.labelSmall)
+                            }
+                            OutlinedButton(
+                                onClick = { stopFloatService() },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = JavisTextSecondary)
+                            ) {
+                                Icon(Icons.Default.Close, null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Hide Now", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // System
             item {
                 SettingsSection("System") {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -161,12 +268,6 @@ fun SettingsScreen(viewModel: MainViewModel) {
                             description = "JAVIS starts when your device boots",
                             checked = settings.autoStartOnBoot,
                             onCheckedChange = { scope.launch { viewModel.settingsManager.updateAutoStart(it) } }
-                        )
-                        ToggleRow(
-                            label = "Floating Button",
-                            description = "Show floating button overlay (requires permission)",
-                            checked = settings.floatingButtonEnabled,
-                            onCheckedChange = { scope.launch { viewModel.settingsManager.updateFloatingButton(it) } }
                         )
                     }
                 }
