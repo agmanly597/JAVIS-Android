@@ -15,10 +15,10 @@ import com.javis.ai.R
 import com.javis.ai.ai.AIProviderManager
 import com.javis.ai.domain.AgentRouter
 import com.javis.ai.domain.PendingAction
+import com.javis.ai.settings.SettingsManager
 import com.javis.ai.voice.SpeechRecognitionManager
 import com.javis.ai.voice.SpeechState
 import com.javis.ai.voice.TTSManager
-import com.javis.ai.settings.SettingsManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collectLatest
@@ -51,35 +51,46 @@ class JavisAssistantService : Service() {
     override fun onCreate() {
         super.onCreate()
         Log.d("JavisService", "Service created")
-        ttsManager.initialize {
-            Log.d("JavisService", "TTS ready")
-        }
+        ttsManager.initialize { Log.d("JavisService", "TTS ready") }
         speechManager.initialize()
         scope.launch { aiProviderManager.configure() }
         observeSpeechResults()
-        scope.launch { maybeStartFloatingButton() }
+        scope.launch { startSupportServices() }
     }
 
-    private suspend fun maybeStartFloatingButton() {
+    private suspend fun startSupportServices() {
         val settings = settingsManager.settings.first()
-        if (!settings.floatingButtonEnabled) return
-        val canDraw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            android.provider.Settings.canDrawOverlays(this)
-        } else true
-        if (!canDraw) return
-        val floatIntent = Intent(this, FloatingWindowService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(floatIntent)
-        } else {
-            startService(floatIntent)
+
+        // Start wake word service if enabled
+        if (settings.wakeWordEnabled) {
+            Log.d("JavisService", "Starting wake word service")
+            startSvc(WakeWordService::class.java)
         }
+
+        // Start floating window if permission granted and setting enabled
+        if (settings.floatingButtonEnabled) {
+            val canDraw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                android.provider.Settings.canDrawOverlays(this)
+            } else true
+            if (canDraw) startSvc(FloatingWindowService::class.java)
+        }
+    }
+
+    private fun startSvc(cls: Class<out Service>) {
+        val i = Intent(this, cls)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(i)
+        else startService(i)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(JavisApplication.NOTIFICATION_ID_ASSISTANT, buildNotification("JAVIS is ready"))
 
         when (intent?.action) {
-            ACTION_ACTIVATE, null -> activate()
+            ACTION_ACTIVATE, null -> {
+                val source = intent?.getStringExtra("source") ?: "unknown"
+                Log.d("JavisService", "Activated from: $source")
+                activate()
+            }
             ACTION_LISTEN -> startListening()
             ACTION_STOP -> stopSelf()
             ACTION_SETTINGS -> openSettings()
@@ -88,6 +99,7 @@ class JavisAssistantService : Service() {
                 pendingAction = null
                 awaitingConfirmation = false
                 ttsManager.speak("Cancelled.")
+                updateNotification("JAVIS is ready")
             }
         }
 
@@ -97,7 +109,7 @@ class JavisAssistantService : Service() {
     private fun activate() {
         scope.launch {
             ttsManager.speakAndWait("Hello. Javis online. How can I help you?")
-            delay(200)
+            delay(150)
             startListening()
         }
     }
@@ -106,8 +118,13 @@ class JavisAssistantService : Service() {
         if (isListening) return
         isListening = true
         updateNotification("Listening...")
+
+        // Pulse the floating button while listening
+        sendBroadcast(Intent(FloatingWindowService.ACTION_PULSE))
+
         speechManager.startListening { text ->
             isListening = false
+            sendBroadcast(Intent(FloatingWindowService.ACTION_STOP_PULSE))
             updateNotification("Processing...")
             scope.launch { processInput(text) }
         }
@@ -119,6 +136,7 @@ class JavisAssistantService : Service() {
                 when (state) {
                     is SpeechState.Error -> {
                         isListening = false
+                        sendBroadcast(Intent(FloatingWindowService.ACTION_STOP_PULSE))
                         updateNotification("JAVIS is ready")
                         if (state.message.contains("permission", ignoreCase = true)) {
                             ttsManager.speak("Microphone permission is required for voice input.")
@@ -126,6 +144,7 @@ class JavisAssistantService : Service() {
                     }
                     is SpeechState.Idle -> {
                         isListening = false
+                        sendBroadcast(Intent(FloatingWindowService.ACTION_STOP_PULSE))
                     }
                     else -> {}
                 }
@@ -163,6 +182,9 @@ class JavisAssistantService : Service() {
             awaitingConfirmation = true
             updateNotification("Awaiting confirmation...")
             ttsManager.speakAndWait(response.spokenText)
+            // Listen again for yes/no
+            delay(200)
+            startListening()
         } else {
             awaitingConfirmation = false
             pendingAction = null
@@ -194,7 +216,6 @@ class JavisAssistantService : Service() {
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
         val listenIntent = PendingIntent.getService(
             this, 1,
             Intent(this, JavisAssistantService::class.java).apply { action = ACTION_LISTEN },
@@ -219,9 +240,9 @@ class JavisAssistantService : Service() {
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setSilent(true)
-            .addAction(0, "Listen", listenIntent)
-            .addAction(0, "Stop", stopIntent)
-            .addAction(0, "Settings", settingsIntent)
+            .addAction(0, "🎤 Listen", listenIntent)
+            .addAction(0, "⚙ Settings", settingsIntent)
+            .addAction(0, "✕ Stop", stopIntent)
             .build()
     }
 
