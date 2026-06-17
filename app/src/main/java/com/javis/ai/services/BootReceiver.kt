@@ -16,22 +16,32 @@ class BootReceiver : BroadcastReceiver() {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED &&
             intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
 
-        Log.d("BootReceiver", "Boot received, checking auto-start setting")
+        Log.d("BootReceiver", "Boot received")
 
-        val autoStart = runBlocking {
-            context.dataStore.data
-                .map { it[booleanPreferencesKey("auto_start_on_boot")] ?: true }
-                .first()
+        val prefs = runBlocking {
+            context.dataStore.data.first()
         }
 
+        val autoStart = prefs[booleanPreferencesKey("auto_start_on_boot")] ?: true
+        val wakeWordEnabled = prefs[booleanPreferencesKey("wake_word_enabled")] ?: false
+
         if (autoStart) {
-            Log.d("BootReceiver", "Auto-starting JAVIS service")
-            val serviceIntent = Intent(context, JavisAssistantService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(serviceIntent)
-            } else {
-                context.startService(serviceIntent)
-            }
+            Log.d("BootReceiver", "Auto-starting JAVIS assistant service")
+            startSvc(context, JavisAssistantService::class.java)
+        }
+
+        if (wakeWordEnabled) {
+            Log.d("BootReceiver", "Starting wake word service")
+            startSvc(context, WakeWordService::class.java)
+        }
+    }
+
+    private fun <T : android.app.Service> startSvc(context: Context, cls: Class<T>) {
+        val svcIntent = Intent(context, cls)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.startForegroundService(svcIntent)
+        } else {
+            context.startService(svcIntent)
         }
     }
 }
