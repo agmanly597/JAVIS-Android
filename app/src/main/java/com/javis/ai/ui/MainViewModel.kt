@@ -10,6 +10,7 @@ import com.javis.ai.domain.AgentRouter
 import com.javis.ai.domain.PendingAction
 import com.javis.ai.memory.MemoryManager
 import com.javis.ai.notifications.NotificationStore
+import com.javis.ai.services.FloatingWindowService
 import com.javis.ai.services.JavisAssistantService
 import com.javis.ai.settings.JavisSettings
 import com.javis.ai.settings.SettingsManager
